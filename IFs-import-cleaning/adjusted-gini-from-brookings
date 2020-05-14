@@ -1,0 +1,65 @@
+#########
+## preparing adjusted gini data from 
+## https://www.brookings.edu/opinions/how-much-do-we-really-know-about-inequality-within-countries-around-the-world/ 
+## for integration with the International Futures (IFs) v7.45 Integrated Assessment Modeling software platform. The file
+## that we want from the authors is "Raw and Pareto-Adjusted Ginis.dta" - a stata output file
+
+
+## libraries
+
+library(countrycode)
+library(haven)
+library(tidyr)
+library(dplyr)
+
+
+## read in data
+
+adj_gini<- read_dta("~~filepath~~/Raw and Pareto-Adjusted Ginis.dta")
+
+
+## create column with WB codes for IFs import
+
+library(countrycode)
+
+adj_gini$wb_code <- countrycode(adj_gini$countryname, origin = "country.name", destination = "wb")
+
+
+## create column with new gini values for import to IFs by overwriting NAs in adjusted gini column where present with unadjusted gini
+
+adj_gini <- as_tibble(adj_gini)
+
+adj_gini <- adj_gini %>% 
+  mutate(
+    import_values = gini_adj
+  )
+
+adj_gini <- adj_gini %>% 
+  rowwise() %>% 
+  mutate(
+    import_values = replace(import_values, is.na(import_values), gini)
+) 
+
+
+## spread data long to wide
+
+adj_gini_panel <- adj_gini %>% 
+  dplyr::select(c("wb_code", "countryname", "year", "import_values"))
+
+adj_gini_panel$year <- as.character(adj_gini_panel$year)
+adj_gini_panel$wb_code <- as.factor(adj_gini_panel$wb_code)
+
+
+adj_gini_panel <- adj_gini_panel %>% 
+  pivot_wider(names_from = year, values_from = import_values, names_repair = "minimal")
+
+adj_gini_panel <- adj_gini_panel %>%
+  dplyr::select(c("wb_code", "countryname", "1990", "1991", "1992", "1993", "1994", "1995", "1996", "1997", "1998", "1999", "2000", "2001", "2002", "2003",
+                  "2004", "2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014")) %>%
+unnest() 
+
+
+
+## write to import file
+
+write.csv(adj_gini_panel, "adjusted_gini_for_IFs_import.csv", row.names = FALSE)
